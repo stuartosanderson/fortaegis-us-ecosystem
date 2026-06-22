@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fortaegis U.S. Ecosystem Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0e1117;--surface:#161b24;--surface2:#1c2333;--border:rgba(255,255,255,0.08);--text:#e8eaf0;--muted:#8b92a5;--faint:#4a5168;--crit:#e05a5a;--impt:#e8af34;--supp:#50c878;}
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden}
+  body{display:flex;flex-direction:column}
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:10;}
+  .hdr-left{display:flex;align-items:center;gap:10px}
+  .logo{width:27px;height:27px;background:linear-gradient(135deg,#4a90d9,#7b5ea7);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+  .hdr-title{font-size:13px;font-weight:600;line-height:1.2}
+  .hdr-sub{font-size:10px;color:var(--muted)}
+  .ring-leg{display:flex;align-items:center;gap:10px}
+  .rli{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--faint)}
+  .rb{width:15px;height:15px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:rgba(255,255,255,0.35)}
+  .rot-btns{display:flex;gap:6px}
+  .rbtn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;transition:color .15s,background .15s}
+  .rbtn:hover{background:#252c3d;color:var(--text)}
+  .legend{display:flex;align-items:center;gap:12px}
+  .li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+  .ld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  main{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  canvas{position:absolute;top:0;left:0;cursor:grab;user-select:none;-webkit-user-select:none}
+  canvas.dragging{cursor:grabbing}
+  #tooltip{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 14px;font-size:12px;pointer-events:none;opacity:0;transition:opacity .12s ease;z-index:100;max-width:270px;box-shadow:0 8px 32px rgba(0,0,0,.55)}
+  #tooltip.vis{opacity:1}
+  .tt-name{font-weight:600;font-size:13px;margin-bottom:3px;color:var(--text)}
+  .tt-role{color:#4a90d9;font-size:11px;margin-bottom:3px;font-weight:500}
+  .tt-desc{color:var(--muted);line-height:1.5;font-size:11px}
+  .tt-pri{display:inline-block;padding:2px 7px;border-radius:999px;font-size:9px;font-weight:600;margin-top:6px;text-transform:uppercase;letter-spacing:.5px}
+  .tt-pri.critical{background:rgba(224,90,90,.18);color:#e05a5a}
+  .tt-pri.important{background:rgba(232,175,52,.18);color:#e8af34}
+  .tt-pri.supporting{background:rgba(80,200,120,.18);color:#50c878}
+  #rot-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--faint);pointer-events:none;background:rgba(14,17,23,.7);padding:3px 10px;border-radius:20px;border:1px solid var(--border)}
+</style>
+</head>
+<body>
+<header>
+  <div class="hdr-left">
+    <div class="logo">FG</div>
+    <div><div class="hdr-title">Fortaegis U.S. Ecosystem Map</div><div class="hdr-sub">SPU Secure Compute &middot; F500 Channel &middot; Defense &middot; Gov &middot; Startups</div></div>
+  </div>
+  <div class="ring-leg">
+    <div class="rli"><div class="rb">2</div><span>Segments</span></div>
+    <div class="rli"><div class="rb">3</div><span>F500 / OEM / Channel</span></div>
+    <div class="rli"><div class="rb">4</div><span>Defense / Gov / Startups</span></div>
+  </div>
+  <div class="rot-btns">
+    <button class="rbtn" id="rotL">&#8634; Left</button>
+    <button class="rbtn" id="rotR">Right &#8635;</button>
+  </div>
+  <div class="legend">
+    <div class="li"><div class="ld" style="background:#e05a5a"></div>Critical</div>
+    <div class="li"><div class="ld" style="background:#e8af34"></div>Important</div>
+    <div class="li"><div class="ld" style="background:#50c878"></div>Supporting</div>
+  </div>
+</header>
+<main id="mainArea">
+  <canvas id="c"></canvas>
+  <div id="tooltip">
+    <div class="tt-name" id="ttN"></div>
+    <div class="tt-role" id="ttR"></div>
+    <div class="tt-desc" id="ttD"></div>
+    <div class="tt-pri"  id="ttP"></div>
+  </div>
+  <div id="rot-hint">Drag to rotate &middot; Hover to explore</div>
+</main>
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+const tip=document.getElementById('tooltip');
+const PC={critical:'#e05a5a',important:'#e8af34',supporting:'#50c878'};
+
+// ─── ECOSYSTEM DATA ────────────────────────────────────────────────────────
+const SEGS=[
+  {id:'defense_tech',label:'Defense Tech\n& Dual-Use',color:'#4a90d9',
+   r3:[
+    {name:'Qualcomm',priority:'critical',role:'Chipset / Edge OEM',desc:'Snapdragon edge silicon with integrated security. Qualcomm Government Technologies division — SPU co-integration path for secure mobile, IoT, and autonomous system compute.'},
+    {name:'IBM',priority:'critical',role:'Enterprise / Gov IT',desc:'Hybrid cloud and security across federal and enterprise. IBM Z mainframe secure enclave heritage maps directly to SPU positioning. IBM Quantum Network partner.'},
+    {name:'Intel',priority:'critical',role:'Chipset OEM',desc:'vPro secure platform, CXL interconnect and Intel TDX (Trust Domain Extensions). SPU integration path into Xeon Scalable edge platforms for defense deployments.'},
+    {name:'Microsoft',priority:'critical',role:'Cloud / Platform',desc:'Azure Government and DoD JWCC cloud contract. SPU as sovereign edge enclave node in Azure Arc and Azure Edge deployments across defense and IC.'},
+    {name:'Honeywell',priority:'critical',role:'Industrial / Quantum',desc:'Quantum-classical hybrid systems and industrial controls. Direct Quantinuum connection via Ilyas Khan — premier Fortaegis relationship entry point across industrial and defense verticals.'},
+    {name:'AMD',priority:'important',role:'Chipset OEM',desc:'EPYC edge processors and Instinct AI accelerators. Secure memory encryption (SME/SEV) architecture aligns with SPU secure enclave model for server and edge.'},
+    {name:'NVIDIA',priority:'important',role:'AI / Edge GPU',desc:'Jetson edge AI platforms and BlueField DPU infrastructure security. NVIDIA Hopper confidential computing alignment with SPU secure processing model.'},
+    {name:'NXP Semi',priority:'important',role:'Embedded OEM',desc:'Secure embedded processors for automotive, IoT and industrial. i.MX and LPC MCU families in defense-adjacent edge systems with established DoD supply chain heritage.'},
+    {name:'Texas Instruments',priority:'supporting',role:'Embedded OEM',desc:'Sitara and Jacinto embedded processors for industrial and automotive edge. Large DoD embedded systems heritage across unmanned and tactical platforms.'},
+    {name:'Broadcom',priority:'supporting',role:'Network Silicon',desc:'Trident and Tomahawk network switch silicon underpins secure data center and tactical network switching. Wide DoD network infrastructure footprint.'},
+   ],
+   r4:[
+    {name:'Anduril',priority:'critical',role:'Defense Tech',desc:'Autonomous defense platforms and Lattice OS — direct SPU integration opportunity for sovereign onboard compute at the edge of weapons and surveillance systems.'},
+    {name:'Epirus',priority:'critical',role:'Directed Energy',desc:'High-power microwave and directed energy systems — secure compute at the edge of the weapons system; power-efficient processing for energy weapons control.'},
+    {name:'Shield AI',priority:'critical',role:'Autonomous AI',desc:'HIVEMIND AI pilot software and autonomous platforms — sovereign compute for denied-communications environments. F-16 and V-BAT deployments.'},
+    {name:'Palantir',priority:'critical',role:'AI / Data Ops',desc:'AI-driven mission operations and intelligence platforms across DoD and IC. AIP for Defense. Widely deployed across classified and unclassified environments.'},
+    {name:'Rebellion Defense',priority:'important',role:'Defense AI',desc:'AI software tools for defense operators; SpaceX Starshield partner. Focused on decision support in contested environments.'},
+    {name:'Shift5',priority:'important',role:'OT Security',desc:'Onboard OT observability for military vehicles, aircraft and fleets. Deployed across Army and Air Force platforms.'},
+    {name:'Cape Analytics',priority:'supporting',role:'AI Analytics',desc:'ML-powered geospatial intelligence for risk assessment across government and critical infrastructure applications.'},
+   ]
+  },
+  {id:'primes',label:'Defense Primes\n& Integrators',color:'#e05a5a',
+   r3:[
+    {name:'Lockheed Martin',priority:'critical',role:'Prime / OEM',desc:'LM Ventures $1B fund with 120+ portfolio companies. Deep secure hardware integration across F-35, satellites and missile defense programs.'},
+    {name:'Northrop Grumman',priority:'critical',role:'Prime / EW',desc:'Electronic warfare, cybersecurity and advanced electronics. B-21 Raider and GBSD programs. Mission Systems division active in secure compute.'},
+    {name:'Raytheon RTX',priority:'critical',role:'Prime / Sensors',desc:'Radar, sensors, secure communications and advanced electronics. Prism II secure processing heritage. Collins Aerospace avionics integration.'},
+    {name:'General Dynamics',priority:'critical',role:'Prime / C4ISR',desc:'GDIT enterprise IT plus secure communications and C4ISR. Mission Systems division. Full spectrum from tactical to strategic secure compute.'},
+    {name:'L3Harris',priority:'critical',role:'Prime / SIGINT',desc:'Tactical radios, SIGINT and electronic warfare. Direct edge compute integration need across tactical communications platforms worldwide.'},
+    {name:'Boeing Defense',priority:'important',role:'Prime',desc:'Airborne and space systems integration. SBInet and ISR programs. AvionX avionics modernization. 702+ defense programs.'},
+    {name:'BAE Systems US',priority:'important',role:'Prime / Cyber',desc:'Electronic systems and cyber intelligence. FAST Labs advanced research programs. British-American dual-use heritage fits Western Alliance positioning.'},
+    {name:'Textron Systems',priority:'supporting',role:'Prime / UAS',desc:'Unmanned systems and armored vehicles. Aerosonde and Fury UAS platforms require edge compute integration for autonomous operations.'},
+   ],
+   r4:[
+    {name:'DARPA',priority:'critical',role:'R&D Funder',desc:'Microsystems Technology Office (MTO). SPU-class hardware is a direct target for DARPA ERI and AISS programs. Strategic funder for next-gen secure compute.'},
+    {name:'DIU',priority:'critical',role:'Gov Procurement',desc:'Commercial tech adoption for DoD via OTA contracts. Resource Optimized Compute program — direct Fortaegis procurement pathway into DoD at speed.'},
+    {name:'In-Q-Tel',priority:'critical',role:'IC Strategic Investor',desc:'CIA-affiliated strategic investor for national security technology. SPU secure compute is directly in scope for IC signal processing and data protection.'},
+    {name:'AFRL',priority:'important',role:'Gov Lab',desc:'Air Force Research Laboratory — advanced electronics and photonics research. Rome Lab cyber division runs active secure compute programs.'},
+    {name:'NRL',priority:'important',role:'Gov Lab',desc:'Naval Research Laboratory. Cybersecurity and information assurance research programs across surface, subsurface and space domains.'},
+    {name:'SOCOM',priority:'important',role:'DoD Command',desc:'Special Operations Command — advanced tech insertion via SOFWERX acquisition pipeline. Rapid prototyping and OTA-friendly procurement culture.'},
+    {name:'NSA / CISA',priority:'supporting',role:'Standards / Gov',desc:'CISA secure-by-design guidance and NSA Commercial Solutions for Classified (CSfC) program shape procurement standards that SPU must meet.'},
+   ]
+  },
+  {id:'server_oem',label:'Server &\nCompute OEMs',color:'#50c878',
+   r3:[
+    {name:'Dell Technologies',priority:'critical',role:'Server / Edge OEM',desc:'Edge and secure server platforms for defense and government. PowerEdge with Project Fort Zero zero-trust architecture. Large DoD volume shipments.'},
+    {name:'HPE',priority:'critical',role:'Server OEM',desc:'Edgeline converged edge systems and Mission Critical Compute division. GreenLake federal managed services. Consistent DoD and IC server presence.'},
+    {name:'Supermicro',priority:'critical',role:'Server OEM',desc:'Custom high-density secure server builds. Heavy DoD custom program history and rapid new product introduction capability. Taiwan-US supply chain.'},
+    {name:'Oracle',priority:'critical',role:'Cloud / HW',desc:'Oracle Cloud for Government; Exadata hardware. FedRAMP-High and DoD Impact Level 5 authorization. Critical infrastructure database heritage.'},
+    {name:'IBM Systems',priority:'important',role:'Server / Mainframe',desc:'IBM z16 AI accelerator mainframe and Power10 servers. Secure enclave heritage at mainframe scale — natural narrative partner for SPU.'},
+    {name:'Lenovo ISG',priority:'important',role:'Server OEM',desc:'Infrastructure solutions group; ThinkSystem federal segment programs and edge compute platforms. NATO and Western Alliance supply chain presence.'},
+    {name:'Penguin Computing',priority:'important',role:'HPC / Gov',desc:'HPC and DoD-specialized compute platforms. Cray heritage in national labs. Atos-Eviden US operations for classified HPC.'},
+    {name:'NetApp',priority:'supporting',role:'Storage / Data',desc:'Hybrid cloud data services for government. FedRAMP-authorized data fabric with consistent DoD and IC deployments.'},
+   ],
+   r4:[
+    {name:'Enfabrica',priority:'critical',role:'Compute Fabric',desc:'AI compute fabric and interconnect chip — potential SPU interconnect layer for disaggregated secure compute architectures at data center scale.'},
+    {name:'SandboxAQ',priority:'critical',role:'Quantum-Safe',desc:'Post-quantum cryptography and AI security. Direct Fortaegis technology adjacency — PQC and secure compute integration opportunity.'},
+    {name:'Groq',priority:'important',role:'Inference HW',desc:'LPU inference accelerators for real-time AI at the edge. Cloud and on-prem deployment options for classified inference workloads.'},
+    {name:'Tenstorrent',priority:'important',role:'AI Hardware',desc:'Open-source AI hardware on RISC-V — sovereign compute architecture alignment for Western Alliance supply chain independence.'},
+    {name:'EdgeCortix',priority:'important',role:'Edge AI',desc:'SAKURA-II AI edge accelerator — DIU OTA agreement; low-power edge deployment in tactical environments.'},
+    {name:'Luminous',priority:'supporting',role:'Photonic Compute',desc:'Photonic computing chips for AI workloads — long-term sovereign compute architecture adjacency to SPU.'},
+   ]
+  },
+  {id:'telecom',label:'Telecom &\nNetwork OEMs',color:'#f4a340',
+   r3:[
+    {name:'Verizon',priority:'critical',role:'Carrier / MEC',desc:'Private 5G and mobile edge compute for defense installations. Verizon Federal portfolio. MEC-hosted SPU node opportunity at base and installation level.'},
+    {name:'AT&T',priority:'critical',role:'Carrier / Gov',desc:'AT&T FirstNet (first responder network) and Government Solutions division. DoD DEOS contract. SPU for sovereign edge enclaves across national security comms.'},
+    {name:'Cisco',priority:'critical',role:'Network OEM',desc:'Secure networking, zero-trust and SASE. Cisco HyperShield 2026 — distributed AI-native security enforcement plane. SPU as a hardware enforcement node.'},
+    {name:'Nokia (US)',priority:'critical',role:'5G / Private Net',desc:'Private 5G networks for defense installations. Nokia NDAC defense-grade deployments. Bell Labs US manufacturing and Western Alliance positioning.'},
+    {name:'Ericsson (US)',priority:'important',role:'5G RAN',desc:'5G RAN and mission-critical network infrastructure. US DoD spectrum and ORAN programs. Swedish-US dual alliance supply chain.'},
+    {name:'Juniper / HPE',priority:'important',role:'Network Security',desc:'AI-driven network security and automation. Mist AI zero-trust platform. Aruba Federal via HPE for campus and tactical network security.'},
+    {name:'Palo Alto Networks',priority:'important',role:'Cybersecurity',desc:'Zero-trust SASE platform. FedRAMP-High authorized. Prisma Access for Government widely deployed across DoD and IC networks.'},
+    {name:'T-Mobile Business',priority:'important',role:'Carrier / 5G',desc:'5G standalone network. FirstNet competition and DoD tactical communications interest. Growing federal and public safety vertical.'},
+    {name:'Lumen Technologies',priority:'supporting',role:'Enterprise Net',desc:'Fiber and edge network services for enterprise and government. Black Lotus Labs threat intelligence platform.'},
+   ],
+   r4:[
+    {name:'Nozomi Networks',priority:'critical',role:'OT/IoT Security',desc:'OT and IoT network security for critical infrastructure and ICS environments. Widely deployed in energy and defense operational technology environments.'},
+    {name:'Armada',priority:'critical',role:'Edge Compute',desc:'Full-stack sovereign edge compute platform — most direct SPU platform overlap in the ecosystem. Deployed in forward and denied environments.'},
+    {name:'Semperis',priority:'important',role:'Identity Security',desc:'Identity-based cyberattack detection and response for Active Directory environments in government and critical infrastructure.'},
+    {name:'Corellium',priority:'important',role:'Virtual HW',desc:'Virtual hardware platform for security research and firmware testing. Used by defense customers for embedded system vulnerability analysis.'},
+    {name:'Expel',priority:'supporting',role:'MDR',desc:'Managed detection and response with transparent operations. FedRAMP-authorized SOC-as-a-service for government and critical infrastructure.'},
+   ]
+  },
+  {id:'gov_labs',label:'Gov Labs &\nValidation',color:'#b07fd4',
+   r3:[
+    {name:'Leidos',priority:'critical',role:'Systems Integrator',desc:'Defense, intelligence and civil IT integration. $15B+ revenue, top DoD prime contractor. Technology Reinvention strategy creates SPU insertion opportunities.'},
+    {name:'GE Aerospace',priority:'critical',role:'Aerospace / Defense',desc:'Jet engines, avionics and military systems. Edge compute integration in flight-critical and mission-critical avionics. F414 and T901 engine programs.'},
+    {name:'GE Vernova',priority:'critical',role:'Grid / Energy',desc:'Grid modernization and industrial digital twins for critical power infrastructure. Secure compute as grid intelligence expands into NERC-CIP environments.'},
+    {name:'Booz Allen Hamilton',priority:'critical',role:'Consulting / Gov IT',desc:'Digital modernization programs across DoD and IC. Quantum Leap initiative and a16z Tech Acceleration Partner. Broad classified program access.'},
+    {name:'Siemens US',priority:'important',role:'Industrial OT',desc:'SIMATIC industrial control systems and Xcelerator digital twin. OT security and secure edge compute integration across energy, defense and manufacturing.'},
+    {name:'SAIC',priority:'important',role:'Gov IT',desc:'IT modernization and digital transformation for DoD. Defense system sustainment and classified program support at scale.'},
+    {name:'MITRE',priority:'important',role:'FFRDC / Standards',desc:'ATT&CK framework, ATLAS AI security matrix. Shapes DoD acquisition standards as a Federally Funded R&D Center — critical for SPU certification pathways.'},
+    {name:'RAND Corp',priority:'supporting',role:'Think Tank / FFRDC',desc:'DoD policy research and technology assessment. Arroyo Center and Project AIR FORCE provide policy context for SPU adoption recommendations.'},
+   ],
+   r4:[
+    {name:'Andesite',priority:'critical',role:'AI SOC',desc:'AI-powered SOC automation for national security. Automates tier-1 analyst triage in classified environments.'},
+    {name:'DEFCON AI',priority:'critical',role:'AI Decision',desc:'AI decision support for national security operators in time-compressed mission environments.'},
+    {name:'Enveil',priority:'important',role:'Encrypted Compute',desc:'Homomorphic encryption for data-in-use protection — directly complements SPU secure compute architecture for protected analytics.'},
+    {name:'HawkEye 360',priority:'important',role:'RF Intel',desc:'RF signal intelligence from commercial satellite constellation. Pattern-of-life analysis for government and defense customers.'},
+    {name:'SpiderOak',priority:'supporting',role:'Zero-Trust Comms',desc:'Zero-trust communications for space and defense operations. No-knowledge cloud architecture for classified data sharing.'},
+   ]
+  },
+  {id:'critical_infra',label:'Critical\nInfrastructure',color:'#5ecbcb',
+   r3:[
+    {name:'Motorola Solutions',priority:'critical',role:'Public Safety / Comms',desc:'Mission-critical communications for first responders and public safety. ASTRO P25 and LMR networks nationwide — large installed base for SPU secure node integration.'},
+    {name:'Honeywell Defense',priority:'critical',role:'Process Control / Nav',desc:'Inertial navigation, avionics and process control systems. Direct Quantinuum link via Ilyas Khan — unique relationship entry across defense and industrial verticals.'},
+    {name:'Parsons Corp',priority:'critical',role:'Critical Infra / Cyber',desc:'Critical infrastructure protection, cyber and space programs. Federal segment over 60% of revenue. Nuclear, chemical and physical security programs.'},
+    {name:'IBM Security',priority:'critical',role:'Enterprise Security',desc:'QRadar SIEM, X-Force threat intelligence and zero-trust consulting. Broad federal security portfolio aligned with SPU secure compute deployment context.'},
+    {name:'Jacobs Engineering',priority:'important',role:'Infrastructure / Gov',desc:'Defense and intelligence infrastructure programs. ODNI and DoD facility modernization contracts. Strong SCIF and secure facility construction heritage.'},
+    {name:'ManTech',priority:'important',role:'Cyber / IT',desc:'Cyber and mission IT solutions for DoD and IC. Digital Transformation as a Service portfolio. Recently acquired by Carlyle Group.'},
+    {name:'Peraton',priority:'important',role:'Gov IT / Mission',desc:'IT and engineering for national security. NASA, DoD and IC mission support across classified and unclassified programs. $7B+ revenue.'},
+    {name:'KBR Government',priority:'supporting',role:'Gov Services',desc:'Science and technology programs for NASA, DoD and DHS. Astro and space systems heritage with growing cyber and digital programs.'},
+   ],
+   r4:[
+    {name:'Primordial Labs',priority:'critical',role:'Mission AI',desc:'Natural language interface for mission systems and unmanned platforms. Enables operator interaction with autonomous systems in contested environments.'},
+    {name:'Aurelius Systems',priority:'critical',role:'Counter-Drone',desc:'Autonomous directed energy counter-drone lasers — edge secure compute at the weapons system level for base defense applications.'},
+    {name:'Claros',priority:'important',role:'Data Analytics',desc:'Data analytics platform for organizational resilience and operational readiness across government and defense customers.'},
+    {name:'Howso AI',priority:'important',role:'Trustworthy AI',desc:'Trustworthy high-performance AI for mission-critical decision contexts. Explainable AI at the edge for commanders and operators.'},
+    {name:'Authentic8',priority:'supporting',role:'Secure Browser',desc:'Secure cloud browser for sensitive government work — complements SPU endpoint security posture for classified and sensitive workloads.'},
+   ]
+  }
+];
+
+// ─── CANVAS STATE ──────────────────────────────────────────────────────────
+let W,H,cx,cy,R0,R1,R1b,R2,R2b,R3,R3b;
+const hits=[];
+let hovHit=null,rotation=0;
+let dragActive=false,dragStart=null,rotAtDrag=0,velocity=0,lastAngle=0,lastT=0,animId=null;
+
+function rgba(hex,a){
+  const h=hex.replace('#','');
+  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+function resize(){
+  const m=document.getElementById('mainArea');
+  W=m.clientWidth;H=m.clientHeight;canvas.width=W;canvas.height=H;
+  cx=W/2;cy=H/2;const d=Math.min(W,H);
+  R0=d*0.088;
+  R1=d*0.170;R1b=d*0.275;   // Ring 2: segments — slightly wider for label readability
+  R2=d*0.292;R2b=d*0.418;   // Ring 3: F500 channel
+  R3=d*0.435;R3b=d*0.528;   // Ring 4: defense/gov/startups
+  draw();
+}
+
+// ─── RING 2: NORTH-UP TEXT (always upright, reads outward from center) ─────
+// Text is positioned at the arc midpoint but never rotated — always readable
+function drawNorthUpText(lines, midR, angle, font, color, lineH) {
+  if (!lines.length) return;
+  ctx.save();
+  // Position at arc midpoint
+  const px = cx + midR * Math.cos(angle);
+  const py = cy + midR * Math.sin(angle);
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // No rotation — text stays perfectly upright (north-up)
+  const totalH = (lines.length - 1) * lineH;
+  lines.forEach((l, i) => {
+    ctx.fillText(l, px, py - totalH / 2 + i * lineH);
+  });
+  ctx.restore();
+}
+
+// ─── RINGS 3 & 4: RADIAL TEXT (rotates with arc, flips so always readable) ─
+function drawRadialText(lines, midR, angle, font, color, lineH) {
+  if (!lines.length) return;
+  ctx.save();
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const px = cx + midR * Math.cos(angle);
+  const py = cy + midR * Math.sin(angle);
+  ctx.translate(px, py);
+  const na = ((angle % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+  const flip = na > Math.PI / 2 && na < 3 * Math.PI / 2;
+  ctx.rotate(flip ? angle + Math.PI : angle);
+  const totalH = (lines.length - 1) * lineH;
+  lines.forEach((l, i) => ctx.fillText(l, 0, -totalH / 2 + i * lineH));
+  ctx.restore();
+}
+
+function wrap(text, maxW, font) {
+  ctx.save(); ctx.font = font;
+  const words = text.split(' '); const out = []; let line = '';
+  for (const w of words) {
+    const t = line ? line + ' ' + w : w;
+    if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; }
+    else line = t;
+  }
+  if (line) out.push(line);
+  ctx.restore(); return out;
+}
+
+function chord(r, span) { return 2 * r * Math.sin(Math.min(span / 2, Math.PI / 2)) * 0.78; }
+
+function arcShape(rIn, rOut, a0, a1, fill, stroke, lw, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+  ctx.beginPath(); ctx.arc(cx, cy, rOut, a0, a1); ctx.arc(cx, cy, rIn, a1, a0, true); ctx.closePath();
+  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 0.8; ctx.stroke(); }
+  ctx.restore();
+}
+
+function draw() {
+  hits.length = 0; ctx.clearRect(0, 0, W, H);
+  const N = SEGS.length, GAP = 0.022;
+  const segSpan = (2 * Math.PI - N * GAP) / N;
+  const base = -Math.PI / 2 + rotation;
+
+  // Subtle ring guide lines
+  [R1, R1b, R2, R2b, R3, R3b].forEach(r => {
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 0.5; ctx.stroke();
+  });
+
+  SEGS.forEach((seg, si) => {
+    const s0 = base + si * (segSpan + GAP);
+    const s1 = s0 + segSpan, sm = s0 + segSpan / 2;
+    const col = seg.color;
+    const isSegHov = hovHit && hovHit.si === si && hovHit.type === 'segment';
+
+    // ── Fill inner annulus so there is no dark gap outside center circle ──
+    arcShape(R0, R1, s0, s1,
+      rgba(col, isSegHov ? 0.20 : 0.11),
+      rgba(col, 0.14),
+      0.5
+    );
+
+    // ── Ring 2: Segment arc ──────────────────────────────────────────────
+    arcShape(R1, R1b, s0, s1,
+      rgba(col, isSegHov ? 0.52 : 0.30),
+      rgba(col, isSegHov ? 1.0 : 0.65),
+      isSegHov ? 1.8 : 0.9
+    );
+
+    // North-up label: always upright, positioned at arc midpoint
+    const segMidR = (R1 + R1b) / 2;
+    const sf = '700 9px Inter,sans-serif';
+    const segLines = seg.label.split('\n');
+    drawNorthUpText(segLines, segMidR, sm, sf, 'rgba(255,255,255,0.95)', 12.5);
+    hits.push({ type: 'segment', si, a0: s0, a1: s1, rIn: R1, rOut: R1b, data: seg });
+
+    // ── Ring 3: F500 / Channel ───────────────────────────────────────────
+    const r3 = seg.r3, r3g = 0.005;
+    const r3span = (segSpan - r3.length * r3g) / r3.length;
+    const r3mid = (R2 + R2b) / 2;
+    r3.forEach((item, ii) => {
+      const a = s0 + ii * (r3span + r3g) + r3g / 2, b = a + r3span, m = a + r3span / 2;
+      const pc = PC[item.priority];
+      const isHov = hovHit && hovHit.type === 'ring3' && hovHit.si === si && hovHit.ii === ii;
+      arcShape(R2, R2b, a, b, rgba(pc, isHov ? .30 : .12), rgba(pc, isHov ? .95 : .42), isHov ? 1.5 : .75);
+      const f = `${isHov ? '600' : '400'} 7.5px Inter,sans-serif`;
+      const lines = wrap(item.name, chord(r3mid, r3span) * 0.88, f);
+      drawRadialText(lines, r3mid, m, f, isHov ? '#fff' : rgba(pc, 0.95), 10);
+      hits.push({ type: 'ring3', si, ii, a0: a, a1: b, rIn: R2, rOut: R2b, data: item });
+    });
+
+    // ── Ring 4: Defense / Gov / Startups ────────────────────────────────
+    const r4 = seg.r4, r4g = 0.005;
+    const r4span = (segSpan - r4.length * r4g) / r4.length;
+    const r4mid = (R3 + R3b) / 2;
+    r4.forEach((item, ii) => {
+      const a = s0 + ii * (r4span + r4g) + r4g / 2, b = a + r4span, m = a + r4span / 2;
+      const pc = PC[item.priority];
+      const isHov = hovHit && hovHit.type === 'ring4' && hovHit.si === si && hovHit.ii === ii;
+      arcShape(R3, R3b, a, b, rgba(pc, isHov ? .22 : .07), rgba(pc, isHov ? .88 : .26), isHov ? 1.5 : .65);
+      const nm = item.name.length > 17 ? item.name.slice(0, 15) + '…' : item.name;
+      const f = `${isHov ? '600' : '400'} 7px Inter,sans-serif`;
+      const lines = wrap(nm, chord(r4mid, r4span) * 0.85, f);
+      drawRadialText(lines, r4mid, m, f, isHov ? '#fff' : rgba(pc, 0.85), 9.5);
+      hits.push({ type: 'ring4', si, ii, a0: a, a1: b, rIn: R3, rOut: R3b, data: item });
+    });
+  });
+
+  // ── Center circle ────────────────────────────────────────────────────────
+  const gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R0);
+  gr.addColorStop(0, '#1e2a4a'); gr.addColorStop(1, '#0e1522');
+  ctx.beginPath(); ctx.arc(cx, cy, R0, 0, 2 * Math.PI); ctx.fillStyle = gr; ctx.fill();
+  ctx.strokeStyle = 'rgba(74,144,217,0.40)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '700 11px Inter,sans-serif'; ctx.fillStyle = '#4a90d9'; ctx.fillText('Fortaegis', cx, cy - 11);
+  ctx.font = '500 8.5px Inter,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.50)'; ctx.fillText('U.S. Ecosystem', cx, cy + 1);
+  ctx.font = '400 7.5px Inter,sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.28)'; ctx.fillText('SPU Secure Compute', cx, cy + 12);
+  ctx.restore();
+}
+
+// ─── HIT TESTING ───────────────────────────────────────────────────────────
+function ptAngle(x, y) { let a = Math.atan2(y - cy, x - cx); return ((a % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI); }
+function inArc(h, x, y) {
+  const dx = x - cx, dy = y - cy, r = Math.sqrt(dx * dx + dy * dy);
+  if (r < h.rIn || r > h.rOut) return false;
+  let a = Math.atan2(dy, dx);
+  const a0 = ((h.a0 % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+  const a1 = ((h.a1 % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+  a = ((a % (2 * Math.PI)) + (2 * Math.PI)) % (2 * Math.PI);
+  if (a0 <= a1) return a >= a0 && a <= a1;
+  return a >= a0 || a <= a1;
+}
+function hitTest(x, y) { for (let i = hits.length - 1; i >= 0; i--) { if (inArc(hits[i], x, y)) return hits[i]; } return null; }
+
+// ─── TOOLTIP ───────────────────────────────────────────────────────────────
+function showTip(h, ex, ey) {
+  const d = h.data;
+  document.getElementById('ttN').textContent = d.name || d.label;
+  document.getElementById('ttR').textContent = d.role || 'Segment';
+  document.getElementById('ttD').textContent = d.desc || (d.r3 && d.r4 ? `${d.r3.length} F500/Channel · ${d.r4.length} Defense/Gov/Startups` : '');
+  const pe = document.getElementById('ttP');
+  if (d.priority) { pe.textContent = d.priority; pe.className = 'tt-pri ' + d.priority; pe.style.display = ''; }
+  else pe.style.display = 'none';
+  const m = 16, tw = 270, th = 175;
+  let tx = ex + m, ty = ey - th / 2;
+  if (tx + tw > window.innerWidth) tx = ex - tw - m;
+  if (ty < 4) ty = 4;
+  if (ty + th > window.innerHeight - 4) ty = window.innerHeight - th - 4;
+  tip.style.left = tx + 'px'; tip.style.top = ty + 'px'; tip.classList.add('vis');
+}
+function hideTip() { tip.classList.remove('vis'); }
+
+// ─── DRAG / SPIN INTERACTION ───────────────────────────────────────────────
+function angleFrom(x, y) { return Math.atan2(y - cy, x - cx); }
+
+canvas.addEventListener('mousedown', e => {
+  dragActive = true; dragStart = angleFrom(e.clientX, e.clientY);
+  rotAtDrag = rotation; velocity = 0; lastAngle = dragStart; lastT = performance.now();
+  canvas.classList.add('dragging'); if (animId) { cancelAnimationFrame(animId); animId = null; }
+});
+canvas.addEventListener('mousemove', e => {
+  if (dragActive) {
+    const a = angleFrom(e.clientX, e.clientY); const now = performance.now();
+    velocity = (a - lastAngle) / (now - lastT || 1) * 16; lastAngle = a; lastT = now;
+    rotation = rotAtDrag + (a - dragStart); hovHit = null; hideTip(); draw();
+  } else {
+    const h = hitTest(e.clientX, e.clientY);
+    if (h !== hovHit) { hovHit = h; draw(); }
+    if (h) showTip(h, e.clientX, e.clientY); else hideTip();
+  }
+});
+canvas.addEventListener('mouseup', e => {
+  if (!dragActive) return; dragActive = false; canvas.classList.remove('dragging');
+  const a = angleFrom(e.clientX, e.clientY);
+  if (Math.abs(a - dragStart) < 0.01) { const h = hitTest(e.clientX, e.clientY); if (h) { hovHit = h; draw(); showTip(h, e.clientX, e.clientY); } }
+  else coast();
+});
+canvas.addEventListener('mouseleave', () => { dragActive = false; canvas.classList.remove('dragging'); hovHit = null; hideTip(); draw(); });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); const t = e.touches[0]; dragActive = true; dragStart = angleFrom(t.clientX, t.clientY); rotAtDrag = rotation; velocity = 0; lastAngle = dragStart; lastT = performance.now(); }, { passive: false });
+canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!dragActive) return; const t = e.touches[0]; const a = angleFrom(t.clientX, t.clientY); const now = performance.now(); velocity = (a - lastAngle) / (now - lastT || 1) * 16; lastAngle = a; lastT = now; rotation = rotAtDrag + (a - dragStart); draw(); }, { passive: false });
+canvas.addEventListener('touchend', e => { dragActive = false; if (Math.abs(velocity) > 0.005) coast(); });
+
+function coast() {
+  if (animId) cancelAnimationFrame(animId);
+  function tick() { velocity *= 0.94; if (Math.abs(velocity) < 0.0003) { animId = null; return; } rotation += velocity; draw(); animId = requestAnimationFrame(tick); }
+  animId = requestAnimationFrame(tick);
+}
+
+document.getElementById('rotL').addEventListener('click', () => { if (animId) { cancelAnimationFrame(animId); animId = null; } velocity = -0.04; coast(); });
+document.getElementById('rotR').addEventListener('click', () => { if (animId) { cancelAnimationFrame(animId); animId = null; } velocity = 0.04; coast(); });
+window.addEventListener('resize', resize);
+resize();
+</script>
+</body>
+</html>
